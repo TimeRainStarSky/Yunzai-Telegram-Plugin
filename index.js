@@ -2,7 +2,6 @@ logger.info(logger.yellow("- 正在加载 Telegram 插件"))
 
 import { config, configSave } from "./Model/config.js"
 import TelegramBot from "node-telegram-bot-api"
-import PluginsLoader from "../../lib/plugins/loader.js"
 process.env.NTBA_FIX_350 = 1
 
 function makeBuffer(base64) {
@@ -10,6 +9,8 @@ function makeBuffer(base64) {
 }
 
 function makeMsg(data, msg) {
+  if (typeof msg == "string")
+    return data.bot.sendMessage(data.id, msg)
   switch (msg.type) {
     case "text":
       logger.info(`${logger.blue(`[${data.self_id}]`)} 发送文本：[${data.id}] ${msg.data.text}`)
@@ -21,8 +22,8 @@ function makeMsg(data, msg) {
       logger.info(`${logger.blue(`[${data.self_id}]`)} 发送音频：[${data.id}]`)
       return data.bot.sendAudio(data.id, makeBuffer(msg.data.file))
     default:
-      logger.info(`${logger.blue(`[${data.self_id}]`)} 发送消息：[${data.id}] ${msg}`)
-      return data.bot.sendMessage(data.id, msg)
+      logger.info(`${logger.blue(`[${data.self_id}]`)} 发送消息：[${data.id}] ${JSON.stringify(msg)}`)
+      return data.bot.sendMessage(data.id, JSON.stringify(msg))
   }
 }
 
@@ -46,7 +47,7 @@ async function makeForwardMsg(data, msg) {
 }
 
 function makeMessage(data) {
-  data.user_id = data.from.id
+  data.user_id = `tg_${data.from.id}`
   data.sender = {
     nickname: data.from.username
   }
@@ -62,7 +63,7 @@ function makeMessage(data) {
     logger.info(`${logger.blue(`[${data.self_id}]`)} 好友消息：[${data.sender.nickname}(${data.user_id})] ${JSON.stringify(data.message)}`)
     data.friend = data.bot.pickFriend(data.user_id)
   } else {
-    data.group_id = data.chat.id
+    data.group_id = `tg_${data.chat.id}`
     data.group_name = data.chat.username
     logger.info(`${logger.blue(`[${data.self_id}]`)} 群消息：[${data.group_name}(${data.group_id}), ${data.sender.nickname}(${data.user_id})] ${JSON.stringify(data.message)}`)
     data.friend = data.bot.pickFriend(data.user_id)
@@ -72,7 +73,6 @@ function makeMessage(data) {
 
   Bot.emit(`${data.post_type}.${data.message_type}`, data)
   Bot.emit(`${data.post_type}`, data)
-  PluginsLoader.deal(data)
 }
 
 for (const token of config.token) {
@@ -81,7 +81,7 @@ for (const token of config.token) {
   Bot[id].on("polling_error", logger.error)
 
   Bot[id].pickFriend = user_id => {
-    let i = { self_id: id, bot: Bot[id], id: user_id }
+    let i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
     return {
       sendMsg: msg => sendMsg(i, msg),
       recallMsg: () => false,
@@ -92,7 +92,7 @@ for (const token of config.token) {
   Bot[id].pickMember = (group_id, user_id) => Bot[id].pickFriend(user_id)
 
   Bot[id].pickGroup = group_id => {
-    let i = { self_id: id, bot: Bot[id], id: group_id }
+    let i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
     return {
       sendMsg: msg => sendMsg(i, msg),
       recallMsg: () => false,
