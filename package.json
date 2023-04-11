@@ -1,0 +1,8 @@
+{
+  "name": "Telegram-Plugin",
+  "type": "module",
+  "author": "TimeRainStarSky",
+  "dependencies": {
+    "node-telegram-bot-api": "^0.61.0"
+  }
+}
