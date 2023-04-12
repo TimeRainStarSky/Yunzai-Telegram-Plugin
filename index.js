@@ -123,19 +123,21 @@ export class Telegram extends plugin {
       name: "Telegram",
       dsc: "Telegram",
       event: "message",
-      permission: "master",
       rule: [
         {
           reg: "^#[Tt][Gg]账号$",
-          fnc: "List"
+          fnc: "List",
+          permission: "master"
         },
         {
           reg: "^#[Tt][Gg]设置[0-9]+:[A-Za-z0-9]+$",
-          fnc: "Token"
+          fnc: "Token",
+          permission: "master"
         },
         {
           reg: "^#[Tt][Gg](代理|反代)",
-          fnc: "Proxy"
+          fnc: "Proxy",
+          permission: "master"
         }
       ]
     })
