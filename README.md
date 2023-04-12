@@ -24,6 +24,6 @@ pnpm i
 
 ## 使用教程
 
-- #TG账号列表
-- #TG添加/删除 + `Token`
-- #TG设置代理 + `scheme://[userinfo@]host[:port]`
+- #TG账号
+- #TG设置 + `Token`
+- #TG代理/反代 + `scheme://[userinfo@]host[:port]`

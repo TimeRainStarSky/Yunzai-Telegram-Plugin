@@ -10,6 +10,7 @@ let configSave = config => fs.writeFileSync(configFile, YAML.stringify(config), 
 let config = {
   tips: "",
   proxy: "",
+  reverseProxy: "",
   token: []
 }
 

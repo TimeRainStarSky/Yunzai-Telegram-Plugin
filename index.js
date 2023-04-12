@@ -77,7 +77,7 @@ function makeMessage(data) {
 
 for (const token of config.token) {
   let id = `tg_${token.split(":")[0]}`
-  Bot[id] = new TelegramBot(token, { polling: true, request: { proxy: config.proxy }})
+  Bot[id] = new TelegramBot(token, { polling: true, baseApiUrl: config.reverseProxy, request: { proxy: config.proxy }})
   Bot[id].on("polling_error", logger.error)
 
   Bot[id].pickFriend = user_id => {
@@ -126,15 +126,15 @@ export class Telegram extends plugin {
       permission: "master",
       rule: [
         {
-          reg: "^#TG账号列表$",
+          reg: "^#[Tt][Gg]账号$",
           fnc: "List"
         },
         {
-          reg: "^#TG(添加|删除)[0-9]+:[A-Za-z0-9]+",
+          reg: "^#[Tt][Gg]设置[0-9]+:[A-Za-z0-9]+$",
           fnc: "Token"
         },
         {
-          reg: "^#TG设置代理",
+          reg: "^#[Tt][Gg](代理|反代)",
           fnc: "Proxy"
         }
       ]
@@ -146,21 +146,26 @@ export class Telegram extends plugin {
   }
 
   async Token () {
-    let token = this.e.msg.replace(/^#TG(添加|删除)/, "").trim()
-    if (this.e.msg.match("添加")) {
-      config.token.push(token)
-      await this.reply(`账号已添加，重启后生效，共${config.token.length}个账号`, true)
-    } else {
+    let token = this.e.msg.replace(/^#[Tt][Gg]设置/, "").trim()
+    if (config.token.includes(token)) {
       config.token = config.token.filter(item => item != token)
       await this.reply(`账号已删除，重启后生效，共${config.token.length}个账号`, true)
+    } else {
+      config.token.push(token)
+      await this.reply(`账号已添加，重启后生效，共${config.token.length}个账号`, true)
     }
-
     configSave(config)
   }
 
   async Proxy () {
-    config.proxy = this.e.msg.replace(/^#TG设置代理/, "").trim()
-    await this.reply(`代理已${config.proxy ? "设置" : "删除"}，重启后生效`, true)
+    let proxy = this.e.msg.replace(/^#[Tt][Gg](代理|反代)/, "").trim()
+    if (this.e.msg.match("代理")) {
+      config.proxy = proxy
+      await this.reply(`代理已${proxy?"设置":"删除"}，重启后生效`, true)
+    } else {
+      config.reverseProxy = proxy
+      await this.reply(`反代已${proxy?"设置":"删除"}，重启后生效`, true)
+    }
     configSave(config)
   }
 }
