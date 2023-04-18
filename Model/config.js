@@ -2,17 +2,18 @@ import fs from "fs"
 import YAML from "yaml"
 import _ from "lodash"
 
-let path = `${process.cwd()}/plugins/Telegram-Plugin/`
-let configFile = `${path}config.yaml`
-let configData
-let configSave = config => fs.writeFileSync(configFile, YAML.stringify(config), "utf-8")
+const path = `${process.cwd()}/plugins/Telegram-Plugin/`
+const configFile = `${path}config.yaml`
+const configSave = config => fs.writeFileSync(configFile, YAML.stringify(config), "utf-8")
 
-let config = {
+const config = {
   tips: "",
   proxy: "",
   reverseProxy: "",
   token: []
 }
+
+let configData
 
 if (fs.existsSync(configFile))
   try {
@@ -27,7 +28,7 @@ config.tips = [
   "参考：https://github.com/TimeRainStarSky/Yunzai-Telegram-Plugin"
 ]
 
-if (config != configData)
+if (YAML.stringify(config) != YAML.stringify(configData))
   configSave(config)
 
 export { config, configSave }

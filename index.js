@@ -8,38 +8,41 @@ function makeBuffer(base64) {
   return Buffer.from(base64.replace(/^base64:\/\//, ""), "base64")
 }
 
-function makeMsg(data, msg) {
-  if (typeof msg == "string")
-    return data.bot.sendMessage(data.id, msg)
-  switch (msg.type) {
-    case "text":
-      logger.info(`${logger.blue(`[${data.self_id}]`)} 发送文本：[${data.id}] ${msg.data.text}`)
-      return data.bot.sendMessage(data.id, msg.data.text)
-    case "image":
-      logger.info(`${logger.blue(`[${data.self_id}]`)} 发送图片：[${data.id}]`)
-      return data.bot.sendPhoto(data.id, makeBuffer(msg.data.file))
-    case "record":
-      logger.info(`${logger.blue(`[${data.self_id}]`)} 发送音频：[${data.id}]`)
-      return data.bot.sendAudio(data.id, makeBuffer(msg.data.file))
-    default:
-      logger.info(`${logger.blue(`[${data.self_id}]`)} 发送消息：[${data.id}] ${JSON.stringify(msg)}`)
-      return data.bot.sendMessage(data.id, JSON.stringify(msg))
-  }
-}
-
 async function sendMsg(data, msg) {
-  if (Array.isArray(msg)) {
-    let msgs = []
-    for (const i of msg)
-      msgs.push(await makeMsg(data, i))
-    return msgs
-  } else {
-    return makeMsg(data, msg)
-  }
+  if (!Array.isArray(msg))
+    msg = [msg]
+  const msgs = []
+  const opts = {}
+  for (let i of msg)
+    switch (i.type) {
+      case "text":
+        logger.info(`${logger.blue(`[${data.self_id}]`)} 发送文本：[${data.id}] ${i.data.text}`)
+        msgs.push(data.bot.sendMessage(data.id, i.data.text, opts))
+        break
+      case "image":
+        logger.info(`${logger.blue(`[${data.self_id}]`)} 发送图片：[${data.id}]`)
+        msgs.push(data.bot.sendPhoto(data.id, makeBuffer(i.data.file), opts))
+        break
+      case "record":
+        logger.info(`${logger.blue(`[${data.self_id}]`)} 发送音频：[${data.id}]`)
+        msgs.push(data.bot.sendAudio(data.id, makeBuffer(i.data.file), opts))
+        break
+      case "reply":
+        opts.reply_to_message_id = i.data.id
+        break
+      case "at":
+        break
+      default:
+        if (typeof i == "object")
+          i = JSON.stringify(i)
+        logger.info(`${logger.blue(`[${data.self_id}]`)} 发送消息：[${data.id}] ${i}`)
+        msgs.push(data.bot.sendMessage(data.id, i, opts))
+    }
+  return msgs
 }
 
 async function makeForwardMsg(data, msg) {
-  let messages = []
+  const messages = []
   for (const i of msg)
     messages.push(await sendMsg(data, i.message))
   messages.data = "消息"
@@ -52,9 +55,15 @@ function makeMessage(data) {
     nickname: data.from.username
   }
   data.post_type = "message"
-  data.message_type = data.chat.type
+  switch (data.chat.type) {
+    case "supergroup":
+      data.message_type = "group"
+      break
+    default:
+      data.message_type = data.chat.type
+  }
 
-  let message = []
+  const message = []
   if (data.text)
     message.push({ type: "text", text: data.text })
   data.message = message
@@ -76,12 +85,12 @@ function makeMessage(data) {
 }
 
 for (const token of config.token) {
-  let id = `tg_${token.split(":")[0]}`
+  const id = `tg_${token.split(":")[0]}`
   Bot[id] = new TelegramBot(token, { polling: true, baseApiUrl: config.reverseProxy, request: { proxy: config.proxy }})
   Bot[id].on("polling_error", logger.error)
 
   Bot[id].pickFriend = user_id => {
-    let i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
+    const i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
     return {
       sendMsg: msg => sendMsg(i, msg),
       recallMsg: () => false,
@@ -92,7 +101,7 @@ for (const token of config.token) {
   Bot[id].pickMember = (group_id, user_id) => Bot[id].pickFriend(user_id)
 
   Bot[id].pickGroup = group_id => {
-    let i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
+    const i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
     return {
       sendMsg: msg => sendMsg(i, msg),
       recallMsg: () => false,
@@ -148,7 +157,7 @@ export class Telegram extends plugin {
   }
 
   async Token () {
-    let token = this.e.msg.replace(/^#[Tt][Gg]设置/, "").trim()
+    const token = this.e.msg.replace(/^#[Tt][Gg]设置/, "").trim()
     if (config.token.includes(token)) {
       config.token = config.token.filter(item => item != token)
       await this.reply(`账号已删除，重启后生效，共${config.token.length}个账号`, true)
@@ -160,7 +169,7 @@ export class Telegram extends plugin {
   }
 
   async Proxy () {
-    let proxy = this.e.msg.replace(/^#[Tt][Gg](代理|反代)/, "").trim()
+    const proxy = this.e.msg.replace(/^#[Tt][Gg](代理|反代)/, "").trim()
     if (this.e.msg.match("代理")) {
       config.proxy = proxy
       await this.reply(`代理已${proxy?"设置":"删除"}，重启后生效`, true)
