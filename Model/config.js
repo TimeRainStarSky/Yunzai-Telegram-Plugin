@@ -31,4 +31,6 @@ config.tips = [
 if (YAML.stringify(config) != YAML.stringify(configData))
   configSave(config)
 
+config.package = JSON.parse(fs.readFileSync(`${path}package.json`, "utf-8"))
+
 export { config, configSave }

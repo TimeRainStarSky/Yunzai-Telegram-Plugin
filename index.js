@@ -52,7 +52,7 @@ async function makeForwardMsg(data, msg) {
 function makeMessage(data) {
   data.user_id = `tg_${data.from.id}`
   data.sender = {
-    nickname: data.from.username
+    nickname: `${data.from.first_name}-${data.from.username}`
   }
   data.post_type = "message"
   switch (data.chat.type) {
@@ -76,7 +76,7 @@ function makeMessage(data) {
     data.friend = data.bot.pickFriend(data.user_id)
   } else {
     data.group_id = `tg_${data.chat.id}`
-    data.group_name = data.chat.username
+    data.group_name = `${data.chat.first_name}-${data.chat.username}`
     if (!Bot[data.self_id].gl.has(data.group_id))
       Bot[data.self_id].gl.set(data.group_id, data.chat)
 
@@ -94,45 +94,63 @@ for (const token of config.token) {
   const id = `tg_${token.split(":")[0]}`
   Bot[id] = new TelegramBot(token, { polling: true, baseApiUrl: config.reverseProxy, request: { proxy: config.proxy }})
   Bot[id].on("polling_error", logger.error)
+  Bot[id].info = await Bot[id].getMe()
 
-  Bot[id].pickFriend = user_id => {
-    const i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
-    return {
-      sendMsg: msg => sendMsg(i, msg),
-      recallMsg: () => false,
-      makeForwardMsg: msg => makeForwardMsg(i, msg),
+  if (Bot[id].info.id) {
+    Bot[id].pickFriend = user_id => {
+      const i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
+      return {
+        sendMsg: msg => sendMsg(i, msg),
+        recallMsg: () => false,
+        makeForwardMsg: msg => makeForwardMsg(i, msg),
+        getInfo: () => Bot[id].getChat(i.id),
+        getAvatarUrl: async () => Bot[id].getFileLink((await Bot[id].getUserProfilePhotos(i.id)).photos[0].pop().file_id),
+      }
     }
-  }
-  Bot[id].pickUser = Bot[id].pickFriend
-  Bot[id].pickMember = (group_id, user_id) => Bot[id].pickFriend(user_id)
+    Bot[id].pickUser = Bot[id].pickFriend
+    Bot[id].pickMember = (group_id, user_id) => Bot[id].pickFriend(user_id)
 
-  Bot[id].pickGroup = group_id => {
-    const i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
-    return {
-      sendMsg: msg => sendMsg(i, msg),
-      recallMsg: () => false,
-      makeForwardMsg: msg => makeForwardMsg(i, msg),
-      pickMember: user_id => Bot[id].pickMember(i.id, user_id),
+    Bot[id].pickGroup = group_id => {
+      const i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
+      return {
+        sendMsg: msg => sendMsg(i, msg),
+        recallMsg: () => false,
+        makeForwardMsg: msg => makeForwardMsg(i, msg),
+        getInfo: () => Bot[id].getChat(i.id),
+        pickMember: user_id => Bot[id].pickMember(i.id, user_id),
+        getMemberInfo: user_id => Bot[id].getChatMember(i.id, user_id),
+      }
     }
-  }
+    Bot[id].getGroupInfo = group_id => Bot[id].pickGroup(group_id).getInfo(),
+    Bot[id].getGroupMemberInfo = (group_id, user_id) => Bot[id].pickGroup(group_id).getMemberInfo(user_id),
 
-  Bot[id].uin = id
-  Bot[id].fl = new Map()
-  Bot[id].gl = new Map()
+    Bot[id].uin = Bot[id].info.id
+    Bot[id].nickname = `${Bot[id].info.first_name}-${Bot[id].info.username}`
+    Bot[id].version = {
+      impl: "TelegramBot",
+      version: config.package.dependencies["node-telegram-bot-api"],
+      onebot_version: "v11",
+    }
+    Bot[id].stat = { start_time: Date.now()/1000 }
+    Bot[id].fl = new Map()
+    Bot[id].gl = new Map()
 
-  if (Array.isArray(Bot.uin)) {
-    if (!Bot.uin.includes(id))
-      Bot.uin.push(id)
+    if (Array.isArray(Bot.uin)) {
+      if (!Bot.uin.includes(id))
+        Bot.uin.push(id)
+    } else {
+      Bot.uin = [id]
+    }
+
+    Bot[id].on("message", data => {
+      data.self_id = id
+      data.bot = Bot[id]
+      makeMessage(data)
+    })
+    logger.mark(`${logger.blue(`[${id}]`)} 已连接`)
   } else {
-    Bot.uin = [id]
+    logger.error(`${logger.blue(`[${id}]`)} 连接失败`)
   }
-
-  Bot[id].on("message", data => {
-    data.self_id = id
-    data.bot = Bot[id]
-    makeMessage(data)
-  })
-  logger.mark(`${logger.blue(`[${id}]`)} 已连接`)
 }
 
 export class Telegram extends plugin {
