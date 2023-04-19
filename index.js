@@ -68,12 +68,18 @@ function makeMessage(data) {
     message.push({ type: "text", text: data.text })
   data.message = message
 
+  if (!Bot[data.self_id].fl.has(data.user_id))
+    Bot[data.self_id].fl.set(data.user_id, data.from)
+
   if (data.from.id == data.chat.id) {
     logger.info(`${logger.blue(`[${data.self_id}]`)} 好友消息：[${data.sender.nickname}(${data.user_id})] ${JSON.stringify(data.message)}`)
     data.friend = data.bot.pickFriend(data.user_id)
   } else {
     data.group_id = `tg_${data.chat.id}`
     data.group_name = data.chat.username
+    if (!Bot[data.self_id].gl.has(data.group_id))
+      Bot[data.self_id].gl.set(data.group_id, data.chat)
+
     logger.info(`${logger.blue(`[${data.self_id}]`)} 群消息：[${data.group_name}(${data.group_id}), ${data.sender.nickname}(${data.user_id})] ${JSON.stringify(data.message)}`)
     data.friend = data.bot.pickFriend(data.user_id)
     data.group = data.bot.pickGroup(data.group_id)
@@ -111,6 +117,8 @@ for (const token of config.token) {
   }
 
   Bot[id].uin = id
+  Bot[id].fl = new Map()
+  Bot[id].gl = new Map()
 
   if (Array.isArray(Bot.uin)) {
     if (!Bot.uin.includes(id))
@@ -118,6 +126,7 @@ for (const token of config.token) {
   } else {
     Bot.uin = [id]
   }
+
   Bot[id].on("message", data => {
     data.self_id = id
     data.bot = Bot[id]
