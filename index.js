@@ -103,12 +103,19 @@ for (const token of config.token) {
         sendMsg: msg => sendMsg(i, msg),
         recallMsg: () => false,
         makeForwardMsg: msg => makeForwardMsg(i, msg),
-        getInfo: () => Bot[id].getChat(i.id),
-        getAvatarUrl: async () => Bot[id].getFileLink((await Bot[id].getUserProfilePhotos(i.id)).photos[0].pop().file_id),
+        getInfo: () => i.bot.getChat(i.id),
+        getAvatarUrl: async () => i.bot.getFileLink((await i.bot.getChat(i.id)).photo.big_file_id),
       }
     }
     Bot[id].pickUser = Bot[id].pickFriend
-    Bot[id].pickMember = (group_id, user_id) => Bot[id].pickFriend(user_id)
+
+    Bot[id].pickMember = (group_id, user_id) => {
+      const i = { self_id: id, bot: Bot[id], group_id: group_id.replace(/^tg_/, ""), user_id: user_id.replace(/^tg_/, "") }
+      return {
+        ...Bot[id].pickFriend(i.user_id),
+        getInfo: () => i.bot.getChatMember(i.group_id, i.user_id),
+      }
+    },
 
     Bot[id].pickGroup = group_id => {
       const i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
@@ -116,13 +123,11 @@ for (const token of config.token) {
         sendMsg: msg => sendMsg(i, msg),
         recallMsg: () => false,
         makeForwardMsg: msg => makeForwardMsg(i, msg),
-        getInfo: () => Bot[id].getChat(i.id),
-        pickMember: user_id => Bot[id].pickMember(i.id, user_id),
-        getMemberInfo: user_id => Bot[id].getChatMember(i.id, user_id),
+        getInfo: () => i.bot.getChat(i.id),
+        getAvatarUrl: async () => i.bot.getFileLink((await i.bot.getChat(i.id)).photo.big_file_id),
+        pickMember: user_id => i.bot.pickMember(i.id, user_id),
       }
     }
-    Bot[id].getGroupInfo = group_id => Bot[id].pickGroup(group_id).getInfo(),
-    Bot[id].getGroupMemberInfo = (group_id, user_id) => Bot[id].pickGroup(group_id).getMemberInfo(user_id),
 
     Bot[id].uin = Bot[id].info.id
     Bot[id].nickname = `${Bot[id].info.first_name}-${Bot[id].info.username}`
