@@ -4,8 +4,13 @@ import { config, configSave } from "./Model/config.js"
 import TelegramBot from "node-telegram-bot-api"
 process.env.NTBA_FIX_350 = 1
 
-function makeBuffer(base64) {
-  return Buffer.from(base64.replace(/^base64:\/\//, ""), "base64")
+async function makeBuffer(file) {
+  if (file.match(/^base64:\/\//))
+    return Buffer.from(file.replace(/^base64:\/\//, ""), "base64")
+  else if (file.match(/^https?:\/\//))
+    return Buffer.from(await (await fetch(file)).arrayBuffer())
+  else
+    return file
 }
 
 async function sendMsg(data, msg) {
@@ -20,12 +25,16 @@ async function sendMsg(data, msg) {
         msgs.push(data.bot.sendMessage(data.id, i.data.text, opts))
         break
       case "image":
-        logger.info(`${logger.blue(`[${data.self_id}]`)} 发送图片：[${data.id}]`)
-        msgs.push(data.bot.sendPhoto(data.id, makeBuffer(i.data.file), opts))
+        logger.info(`${logger.blue(`[${data.self_id}]`)} 发送图片：[${data.id}] ${i.data.file.replace(/^base64:\/\/.*/, "base64://...")}`)
+        msgs.push(data.bot.sendPhoto(data.id, await makeBuffer(i.data.file), opts))
         break
       case "record":
-        logger.info(`${logger.blue(`[${data.self_id}]`)} 发送音频：[${data.id}]`)
-        msgs.push(data.bot.sendAudio(data.id, makeBuffer(i.data.file), opts))
+        logger.info(`${logger.blue(`[${data.self_id}]`)} 发送音频：[${data.id}] ${i.data.file.replace(/^base64:\/\/.*/, "base64://...")}`)
+        msgs.push(data.bot.sendAudio(data.id, await makeBuffer(i.data.file), opts))
+        break
+      case "video":
+        logger.info(`${logger.blue(`[${data.self_id}]`)} 发送视频：[${data.id}] ${i.data.file.replace(/^base64:\/\/.*/, "base64://...")}`)
+        msgs.push(data.bot.sendVideo(data.id, await makeBuffer(i.data.file), opts))
         break
       case "reply":
         opts.reply_to_message_id = i.data.id
