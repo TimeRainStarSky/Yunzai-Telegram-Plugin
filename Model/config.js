@@ -24,7 +24,7 @@ if (fs.existsSync(configFile))
   }
 
 config.tips = [
-  "欢迎使用 Yunzai Telegram Plugin ! 作者：时雨🌌星空",
+  "欢迎使用 TRSS-Yunzai Telegram Plugin ! 作者：时雨🌌星空",
   "参考：https://github.com/TimeRainStarSky/Yunzai-Telegram-Plugin"
 ]
 

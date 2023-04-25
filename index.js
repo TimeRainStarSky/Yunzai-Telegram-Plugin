@@ -99,77 +99,82 @@ function makeMessage(data) {
   Bot.emit(`${data.post_type}`, data)
 }
 
-Bot.once("online", async () => {
-  for (const token of config.token) {
-    const id = `tg_${token.split(":")[0]}`
-    Bot[id] = new TelegramBot(token, { polling: true, baseApiUrl: config.reverseProxy, request: { proxy: config.proxy }})
-    Bot[id].on("polling_error", logger.error)
-    Bot[id].info = await Bot[id].getMe()
+async function connectBot(token) {
+  const id = `tg_${token.split(":")[0]}`
+  Bot[id] = new TelegramBot(token, { polling: true, baseApiUrl: config.reverseProxy, request: { proxy: config.proxy }})
+  Bot[id].on("polling_error", logger.error)
+  Bot[id].info = await Bot[id].getMe()
 
-    if (Bot[id].info.id) {
-      Bot[id].pickFriend = user_id => {
-        const i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
-        return {
-          sendMsg: msg => sendMsg(i, msg),
-          recallMsg: () => false,
-          makeForwardMsg: msg => makeForwardMsg(i, msg),
-          getInfo: () => i.bot.getChat(i.id),
-          getAvatarUrl: async () => i.bot.getFileLink((await i.bot.getChat(i.id)).photo.big_file_id),
-        }
+  if (Bot[id].info.id) {
+    Bot[id].pickFriend = user_id => {
+      const i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
+      return {
+        sendMsg: msg => sendMsg(i, msg),
+        recallMsg: () => false,
+        makeForwardMsg: msg => makeForwardMsg(i, msg),
+        getInfo: () => i.bot.getChat(i.id),
+        getAvatarUrl: async () => i.bot.getFileLink((await i.bot.getChat(i.id)).photo.big_file_id),
       }
-      Bot[id].pickUser = Bot[id].pickFriend
-
-      Bot[id].pickMember = (group_id, user_id) => {
-        const i = { self_id: id, bot: Bot[id], group_id: group_id.replace(/^tg_/, ""), user_id: user_id.replace(/^tg_/, "") }
-        return {
-          ...Bot[id].pickFriend(i.user_id),
-          getInfo: () => i.bot.getChatMember(i.group_id, i.user_id),
-        }
-      },
-
-      Bot[id].pickGroup = group_id => {
-        const i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
-        return {
-          sendMsg: msg => sendMsg(i, msg),
-          recallMsg: () => false,
-          makeForwardMsg: msg => makeForwardMsg(i, msg),
-          getInfo: () => i.bot.getChat(i.id),
-          getAvatarUrl: async () => i.bot.getFileLink((await i.bot.getChat(i.id)).photo.big_file_id),
-          pickMember: user_id => i.bot.pickMember(i.id, user_id),
-        }
-      }
-
-      Bot[id].uin = Bot[id].info.id
-      Bot[id].nickname = `${Bot[id].info.first_name}-${Bot[id].info.username}`
-      Bot[id].version = {
-        impl: "TelegramBot",
-        version: config.package.dependencies["node-telegram-bot-api"],
-        onebot_version: "v11",
-      }
-      Bot[id].stat = { start_time: Date.now()/1000 }
-      Bot[id].fl = new Map()
-      Bot[id].gl = new Map()
-
-      if (Array.isArray(Bot.uin)) {
-        if (!Bot.uin.includes(id))
-          Bot.uin.push(id)
-      } else {
-        Bot.uin = [id]
-      }
-
-      Bot[id].on("message", data => {
-        data.self_id = id
-        data.bot = Bot[id]
-        makeMessage(data)
-      })
-      logger.mark(`${logger.blue(`[${id}]`)} TelegramBot 已连接`)
-
-      Bot.emit(`connect.${id}`, Bot[id])
-      Bot.emit(`connect`, Bot[id])
-    } else {
-      logger.error(`${logger.blue(`[${id}]`)} TelegramBot 连接失败`)
     }
+    Bot[id].pickUser = Bot[id].pickFriend
+
+    Bot[id].pickMember = (group_id, user_id) => {
+      const i = { self_id: id, bot: Bot[id], group_id: group_id.replace(/^tg_/, ""), user_id: user_id.replace(/^tg_/, "") }
+      return {
+        ...Bot[id].pickFriend(i.user_id),
+        getInfo: () => i.bot.getChatMember(i.group_id, i.user_id),
+      }
+    },
+
+    Bot[id].pickGroup = group_id => {
+      const i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
+      return {
+        sendMsg: msg => sendMsg(i, msg),
+        recallMsg: () => false,
+        makeForwardMsg: msg => makeForwardMsg(i, msg),
+        getInfo: () => i.bot.getChat(i.id),
+        getAvatarUrl: async () => i.bot.getFileLink((await i.bot.getChat(i.id)).photo.big_file_id),
+        pickMember: user_id => i.bot.pickMember(i.id, user_id),
+      }
+    }
+
+    Bot[id].uin = Bot[id].info.id
+    Bot[id].nickname = `${Bot[id].info.first_name}-${Bot[id].info.username}`
+    Bot[id].version = {
+      impl: "TelegramBot",
+      version: config.package.dependencies["node-telegram-bot-api"],
+      onebot_version: "v11",
+    }
+    Bot[id].stat = { start_time: Date.now()/1000 }
+    Bot[id].fl = new Map()
+    Bot[id].gl = new Map()
+
+    if (Array.isArray(Bot.uin)) {
+      if (!Bot.uin.includes(id))
+        Bot.uin.push(id)
+    } else {
+      Bot.uin = [id]
+    }
+
+    Bot[id].on("message", data => {
+      data.self_id = id
+      data.bot = Bot[id]
+      makeMessage(data)
+    })
+    logger.mark(`${logger.blue(`[${id}]`)} TelegramBot 已连接`)
+
+    Bot.emit(`connect.${id}`, Bot[id])
+    Bot.emit(`connect`, Bot[id])
+    return true
+  } else {
+    logger.error(`${logger.blue(`[${id}]`)} TelegramBot 连接失败`)
+    return false
   }
+}
+
+Bot.once("online", async () => {
+  for (const token of config.token)
+    await connectBot(token)
 })
 
 export class Telegram extends plugin {
@@ -208,8 +213,12 @@ export class Telegram extends plugin {
       config.token = config.token.filter(item => item != token)
       await this.reply(`账号已删除，重启后生效，共${config.token.length}个账号`, true)
     } else {
-      config.token.push(token)
-      await this.reply(`账号已添加，重启后生效，共${config.token.length}个账号`, true)
+      if (await connectBot(token)) {
+        config.token.push(token)
+        await this.reply(`账号已连接，共${config.token.length}个账号`, true)
+      } else {
+        await this.reply(`账号连接失败`, true)
+      }
     }
     configSave(config)
   }
