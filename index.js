@@ -100,15 +100,27 @@ function makeMessage(data) {
 }
 
 async function connectBot(token) {
-  const id = `tg_${token.split(":")[0]}`
-  Bot[id] = new TelegramBot(token, { polling: true, baseApiUrl: config.reverseProxy, request: { proxy: config.proxy }})
-  Bot[id].on("polling_error", logger.error)
-  Bot[id].info = await Bot[id].getMe()
+  const bot = new TelegramBot(token, { polling: true, baseApiUrl: config.reverseProxy, request: { proxy: config.proxy }})
+  bot.on("polling_error", logger.error)
+  bot.info = await bot.getMe()
 
-  if (!Bot[id].info.id) {
-    logger.error(`${logger.blue(`[${id}]`)} TelegramBot 连接失败`)
+  if (!bot.info.id) {
+    logger.error(`${logger.blue(`[${token}]`)} TelegramBot 连接失败`)
     return false
   }
+
+  const id = `tg_${bot.info.id}`
+  Bot[id] = bot
+  Bot[id].uin = id
+  Bot[id].nickname = `${Bot[id].info.first_name}-${Bot[id].info.username}`
+  Bot[id].version = {
+    impl: "TelegramBot",
+    version: config.package.dependencies["node-telegram-bot-api"],
+    onebot_version: "v11",
+  }
+  Bot[id].stat = { start_time: Date.now()/1000 }
+  Bot[id].fl = new Map()
+  Bot[id].gl = new Map()
 
   Bot[id].pickFriend = user_id => {
     const i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
@@ -141,17 +153,6 @@ async function connectBot(token) {
       pickMember: user_id => i.bot.pickMember(i.id, user_id),
     }
   }
-
-  Bot[id].uin = Bot[id].info.id
-  Bot[id].nickname = `${Bot[id].info.first_name}-${Bot[id].info.username}`
-  Bot[id].version = {
-    impl: "TelegramBot",
-    version: config.package.dependencies["node-telegram-bot-api"],
-    onebot_version: "v11",
-  }
-  Bot[id].stat = { start_time: Date.now()/1000 }
-  Bot[id].fl = new Map()
-  Bot[id].gl = new Map()
 
   if (Array.isArray(Bot.uin)) {
     if (!Bot.uin.includes(id))
