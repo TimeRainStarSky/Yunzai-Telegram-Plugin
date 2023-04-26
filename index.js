@@ -18,7 +18,11 @@ async function sendMsg(data, msg) {
     msg = [msg]
   const msgs = []
   const opts = {}
-  for (let i of msg)
+  for (let i of msg) {
+    if (typeof i != "object")
+      i = { type: "text", data: { text: i }}
+    else if (!i.data)
+      i = { type: i.type, data: { ...i }}
     switch (i.type) {
       case "text":
         logger.info(`${logger.blue(`[${data.self_id}]`)} 发送文本：[${data.id}] ${i.data.text}`)
@@ -47,6 +51,7 @@ async function sendMsg(data, msg) {
         logger.info(`${logger.blue(`[${data.self_id}]`)} 发送消息：[${data.id}] ${i}`)
         msgs.push(data.bot.sendMessage(data.id, i, opts))
     }
+  }
   return msgs
 }
 
@@ -137,7 +142,7 @@ async function connectBot(token) {
   Bot[id].pickMember = (group_id, user_id) => {
     const i = { self_id: id, bot: Bot[id], group_id: group_id.replace(/^tg_/, ""), user_id: user_id.replace(/^tg_/, "") }
     return {
-      ...Bot[id].pickFriend(i.user_id),
+      ...Bot[id].pickFriend(user_id),
       getInfo: () => i.bot.getChatMember(i.group_id, i.user_id),
     }
   },
@@ -219,6 +224,7 @@ export class Telegram extends plugin {
         await this.reply(`账号已连接，共${config.token.length}个账号`, true)
       } else {
         await this.reply(`账号连接失败`, true)
+        return false
       }
     }
     configSave(config)
