@@ -1,6 +1,7 @@
 logger.info(logger.yellow("- 正在加载 Telegram 插件"))
 
 import { config, configSave } from "./Model/config.js"
+import fetch from "node-fetch"
 import TelegramBot from "node-telegram-bot-api"
 process.env.NTBA_FIX_350 = 1
 
