@@ -2,6 +2,7 @@ logger.info(logger.yellow("- 正在加载 Telegram 插件"))
 
 import { config, configSave } from "./Model/config.js"
 import fetch from "node-fetch"
+import path from "node:path"
 import TelegramBot from "node-telegram-bot-api"
 process.env.NTBA_FIX_350 = 1
 
@@ -47,6 +48,9 @@ const adapter = new class TelegramAdapter {
           break
         case "at":
           break
+        case "node":
+          msgs.push(await this.sendForwardMsg(data, i.data))
+          break
         default:
           i = JSON.stringify(i)
           logger.info(`${logger.blue(`[${data.self_id}]`)} 发送消息：[${data.id}] ${i}`)
@@ -56,12 +60,54 @@ const adapter = new class TelegramAdapter {
     return msgs
   }
 
-  async makeForwardMsg(data, msg) {
+  async sendForwardMsg(data, msg) {
     const messages = []
     for (const i of msg)
       messages.push(await this.sendMsg(data, i.message))
-    messages.data = "消息"
     return messages
+  }
+
+  async getAvatarUrl(data) {
+    return data.bot.getFileLink((await data.bot.getChat(data.id)).photo.big_file_id)
+  }
+
+  async sendFile(data, file, filename = path.basename(file)) {
+    return data.bot.sendDocument(data.id, await this.makeBuffer(file), undefined, { filename })
+  }
+
+  pickFriend(id, user_id) {
+    const i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
+    return {
+      sendMsg: msg => this.sendMsg(i, msg),
+      recallMsg: () => false,
+      makeForwardMsg: Bot.makeForwardMsg,
+      sendForwardMsg: msg => this.sendForwardMsg(i, msg),
+      sendFile: (file, name) => this.sendFile(i, file, name),
+      getInfo: () => i.bot.getChat(i.id),
+      getAvatarUrl: () => this.getAvatarUrl(i),
+    }
+  }
+
+  pickMember(id, group_id, user_id) {
+    const i = { self_id: id, bot: Bot[id], group_id: group_id.replace(/^tg_/, ""), user_id: user_id.replace(/^tg_/, "") }
+    return {
+      ...this.pickFriend(i, user_id),
+      getInfo: () => i.bot.getChatMember(i.group_id, i.user_id),
+    }
+  }
+
+  pickGroup(id, group_id) {
+    const i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
+    return {
+      sendMsg: msg => this.sendMsg(i, msg),
+      recallMsg: () => false,
+      makeForwardMsg: Bot.makeForwardMsg,
+      sendForwardMsg: msg => this.sendForwardMsg(i, msg),
+      sendFile: (file, name) => this.sendFile(i, file, name),
+      getInfo: () => i.bot.getChat(i.id),
+      getAvatarUrl: () => this.getAvatarUrl(i),
+      pickMember: user_id => this.pickMember(i, i.id, user_id),
+    }
   }
 
   makeMessage(data) {
@@ -89,7 +135,7 @@ const adapter = new class TelegramAdapter {
       Bot[data.self_id].fl.set(data.user_id, data.from)
 
     if (data.from.id == data.chat.id) {
-      logger.info(`${logger.blue(`[${data.self_id}]`)} 好友消息：[${data.sender.nickname}(${data.user_id})] ${JSON.stringify(data.message)}`)
+      logger.info(`${logger.blue(`[${data.self_id}]`)} 好友消息：[${data.sender.nickname}(${data.user_id})] ${data.raw_message}`)
       data.friend = data.bot.pickFriend(data.user_id)
     } else {
       data.group_id = `tg_${data.chat.id}`
@@ -97,7 +143,7 @@ const adapter = new class TelegramAdapter {
       if (!Bot[data.self_id].gl.has(data.group_id))
         Bot[data.self_id].gl.set(data.group_id, data.chat)
 
-      logger.info(`${logger.blue(`[${data.self_id}]`)} 群消息：[${data.group_name}(${data.group_id}), ${data.sender.nickname}(${data.user_id})] ${JSON.stringify(data.message)}`)
+      logger.info(`${logger.blue(`[${data.self_id}]`)} 群消息：[${data.group_name}(${data.group_id}), ${data.sender.nickname}(${data.user_id})] ${data.raw_message}`)
       data.friend = data.bot.pickFriend(data.user_id)
       data.group = data.bot.pickGroup(data.group_id)
       data.member = data.group.pickMember(data.user_id)
@@ -130,37 +176,11 @@ const adapter = new class TelegramAdapter {
     Bot[id].fl = new Map()
     Bot[id].gl = new Map()
 
-    Bot[id].pickFriend = user_id => {
-      const i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
-      return {
-        sendMsg: msg => this.sendMsg(i, msg),
-        recallMsg: () => false,
-        makeForwardMsg: msg => this.makeForwardMsg(i, msg),
-        getInfo: () => i.bot.getChat(i.id),
-        getAvatarUrl: async () => i.bot.getFileLink((await i.bot.getChat(i.id)).photo.big_file_id),
-      }
-    }
+    Bot[id].pickFriend = user_id => this.pickFriend(id, user_id)
     Bot[id].pickUser = Bot[id].pickFriend
 
-    Bot[id].pickMember = (group_id, user_id) => {
-      const i = { self_id: id, bot: Bot[id], group_id: group_id.replace(/^tg_/, ""), user_id: user_id.replace(/^tg_/, "") }
-      return {
-        ...Bot[id].pickFriend(user_id),
-        getInfo: () => i.bot.getChatMember(i.group_id, i.user_id),
-      }
-    }
-
-    Bot[id].pickGroup = group_id => {
-      const i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
-      return {
-        sendMsg: msg => this.sendMsg(i, msg),
-        recallMsg: () => false,
-        makeForwardMsg: msg => this.makeForwardMsg(i, msg),
-        getInfo: () => i.bot.getChat(i.id),
-        getAvatarUrl: async () => i.bot.getFileLink((await i.bot.getChat(i.id)).photo.big_file_id),
-        pickMember: user_id => i.bot.pickMember(i.id, user_id),
-      }
-    }
+    Bot[id].pickMember = (group_id, user_id) => this.pickMember(id, group_id, user_id)
+    Bot[id].pickGroup = group_id => this.pickGroup(id, group_id)
 
     Bot[id].avatar = await Bot[id].pickFriend(id).getAvatarUrl()
 
@@ -202,7 +222,7 @@ export class Telegram extends plugin {
           permission: "master"
         },
         {
-          reg: "^#[Tt][Gg]设置[0-9]+:[A-Za-z0-9]+$",
+          reg: "^#[Tt][Gg]设置[0-9]+:.+$",
           fnc: "Token",
           permission: "master"
         },
