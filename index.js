@@ -106,16 +106,19 @@ const adapter = new class TelegramAdapter {
       sendFile: (file, name) => this.sendFile(i, file, name),
       getInfo: () => i.bot.getChat(i.id),
       getAvatarUrl: () => this.getAvatarUrl(i),
-      pickMember: user_id => this.pickMember(i, i.id, user_id),
+      pickMember: user_id => this.pickMember(id, i.id, user_id),
     }
   }
 
   makeMessage(data) {
+    data.post_type = "message"
     data.user_id = `tg_${data.from.id}`
     data.sender = {
-      nickname: `${data.from.first_name}-${data.from.username}`
+      user_id: data.user_id,
+      nickname: `${data.from.first_name}-${data.from.username}`,
     }
-    data.post_type = "message"
+    data.bot.fl.set(data.user_id, { ...data.from, ...data.sender })
+
     switch (data.chat.type) {
       case "supergroup":
         data.message_type = "group"
@@ -131,17 +134,17 @@ const adapter = new class TelegramAdapter {
       data.raw_message += data.text
     }
 
-    if (!Bot[data.self_id].fl.has(data.user_id))
-      Bot[data.self_id].fl.set(data.user_id, data.from)
-
     if (data.from.id == data.chat.id) {
       logger.info(`${logger.blue(`[${data.self_id}]`)} 好友消息：[${data.sender.nickname}(${data.user_id})] ${data.raw_message}`)
       data.friend = data.bot.pickFriend(data.user_id)
     } else {
       data.group_id = `tg_${data.chat.id}`
-      data.group_name = `${data.chat.first_name}-${data.chat.username}`
-      if (!Bot[data.self_id].gl.has(data.group_id))
-        Bot[data.self_id].gl.set(data.group_id, data.chat)
+      data.group_name = `${data.chat.title}-${data.chat.username}`
+      data.bot.gl.set(data.group_id, {
+        ...data.chat,
+        group_id: data.group_id,
+        group_name: data.group_name,
+      })
 
       logger.info(`${logger.blue(`[${data.self_id}]`)} 群消息：[${data.group_name}(${data.group_id}), ${data.sender.nickname}(${data.user_id})] ${data.raw_message}`)
       data.friend = data.bot.pickFriend(data.user_id)
