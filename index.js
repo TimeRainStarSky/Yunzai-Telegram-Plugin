@@ -7,6 +7,11 @@ import TelegramBot from "node-telegram-bot-api"
 process.env.NTBA_FIX_350 = 1
 
 const adapter = new class TelegramAdapter {
+  constructor() {
+    this.id = "Telegram"
+    this.name = "TelegramBot"
+  }
+
   async makeBuffer(file) {
     if (file.match(/^base64:\/\//))
       return Buffer.from(file.replace(/^base64:\/\//, ""), "base64")
@@ -76,8 +81,14 @@ const adapter = new class TelegramAdapter {
   }
 
   pickFriend(id, user_id) {
-    const i = { self_id: id, bot: Bot[id], id: user_id.replace(/^tg_/, "") }
+    const i = {
+      ...Bot[id].fl.get(user_id),
+      self_id: id,
+      bot: Bot[id],
+      id: user_id.replace(/^tg_/, ""),
+    }
     return {
+      ...i,
       sendMsg: msg => this.sendMsg(i, msg),
       recallMsg: () => false,
       makeForwardMsg: Bot.makeForwardMsg,
@@ -89,16 +100,29 @@ const adapter = new class TelegramAdapter {
   }
 
   pickMember(id, group_id, user_id) {
-    const i = { self_id: id, bot: Bot[id], group_id: group_id.replace(/^tg_/, ""), user_id: user_id.replace(/^tg_/, "") }
+    const i = {
+      ...Bot[id].fl.get(user_id),
+      self_id: id,
+      bot: Bot[id],
+      group_id: group_id.replace(/^tg_/, ""),
+      user_id: user_id.replace(/^tg_/, ""),
+    }
     return {
       ...this.pickFriend(i, user_id),
+      ...i,
       getInfo: () => i.bot.getChatMember(i.group_id, i.user_id),
     }
   }
 
   pickGroup(id, group_id) {
-    const i = { self_id: id, bot: Bot[id], id: group_id.replace(/^tg_/, "") }
+    const i = {
+      ...Bot[id].gl.get(group_id),
+      self_id: id,
+      bot: Bot[id],
+      id: group_id.replace(/^tg_/, ""),
+    }
     return {
+      ...i,
       sendMsg: msg => this.sendMsg(i, msg),
       recallMsg: () => false,
       makeForwardMsg: Bot.makeForwardMsg,
@@ -162,7 +186,7 @@ const adapter = new class TelegramAdapter {
     bot.info = await bot.getMe()
 
     if (!bot.info.id) {
-      logger.error(`${logger.blue(`[${token}]`)} TelegramBot 连接失败`)
+      logger.error(`${logger.blue(`[${token}]`)} ${this.name}(${this.id}) 连接失败`)
       return false
     }
 
@@ -171,9 +195,9 @@ const adapter = new class TelegramAdapter {
     Bot[id].uin = id
     Bot[id].nickname = `${Bot[id].info.first_name}-${Bot[id].info.username}`
     Bot[id].version = {
-      impl: "TelegramBot",
+      id: this.id,
+      name: this.name,
       version: config.package.dependencies["node-telegram-bot-api"],
-      onebot_version: "v11",
     }
     Bot[id].stat = { start_time: Date.now()/1000 }
     Bot[id].fl = new Map()
@@ -187,12 +211,8 @@ const adapter = new class TelegramAdapter {
 
     Bot[id].avatar = await Bot[id].pickFriend(id).getAvatarUrl()
 
-    if (Array.isArray(Bot.uin)) {
-      if (!Bot.uin.includes(id))
-        Bot.uin.push(id)
-    } else {
-      Bot.uin = [id]
-    }
+    if (!Bot.uin.includes(id))
+      Bot.uin.push(id)
 
     Bot[id].on("message", data => {
       data.self_id = id
@@ -200,20 +220,23 @@ const adapter = new class TelegramAdapter {
       this.makeMessage(data)
     })
 
-    logger.mark(`${logger.blue(`[${id}]`)} TelegramBot 已连接`)
+    logger.mark(`${logger.blue(`[${id}]`)} ${this.name}(${this.id}) 已连接`)
     Bot.emit(`connect.${id}`, Bot[id])
     Bot.emit(`connect`, Bot[id])
     return true
   }
+
+  async load() {
+    for (const token of config.token)
+      await adapter.connect(token)
+    return true
+  }
 }
 
-Bot.once("online", async () => {
-  for (const token of config.token)
-    await adapter.connect(token)
-})
+Bot.adapter.push(adapter)
 
 export class Telegram extends plugin {
-  constructor () {
+  constructor() {
     super({
       name: "Telegram",
       dsc: "Telegram",
