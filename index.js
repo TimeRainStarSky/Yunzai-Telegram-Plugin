@@ -108,7 +108,7 @@ const adapter = new class TelegramAdapter {
       user_id: user_id.replace(/^tg_/, ""),
     }
     return {
-      ...this.pickFriend(i, user_id),
+      ...this.pickFriend(id, user_id),
       ...i,
       getInfo: () => i.bot.getChatMember(i.group_id, i.user_id),
     }
