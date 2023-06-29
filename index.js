@@ -3,6 +3,8 @@ logger.info(logger.yellow("- 正在加载 Telegram 插件"))
 import { config, configSave } from "./Model/config.js"
 import fetch from "node-fetch"
 import path from "node:path"
+import { fileTypeFromBuffer } from "file-type"
+import sizeOf from "image-size"
 import TelegramBot from "node-telegram-bot-api"
 process.env.NTBA_FIX_350 = 1
 
@@ -21,6 +23,23 @@ const adapter = new class TelegramAdapter {
       return file
   }
 
+  async fileType(data) {
+    const file = {}
+    try {
+      file.url = data.replace(/^base64:\/\/.*/, "base64://...")
+      file.buffer = await this.makeBuffer(data)
+      if (Buffer.isBuffer(file.buffer)) {
+        file.type = await fileTypeFromBuffer(file.buffer)
+        file.name = `${Date.now()}.${file.type.ext}`
+      } else {
+        file.name = path.basename(file.buffer)
+      }
+    } catch (err) {
+      logger.error(`文件类型检测错误：${logger.red(err)}`)
+    }
+    return file
+  }
+
   async sendMsg(data, msg) {
     if (!Array.isArray(msg))
       msg = [msg]
@@ -31,22 +50,31 @@ const adapter = new class TelegramAdapter {
         i = { type: "text", data: { text: i }}
       else if (!i.data)
         i = { type: i.type, data: { ...i, type: undefined }}
+
+      let file
+      if (i.data.file)
+        file = await this.fileType(i.data.file)
+
       switch (i.type) {
         case "text":
           logger.info(`${logger.blue(`[${data.self_id}]`)} 发送文本：[${data.id}] ${i.data.text}`)
           msgs.push(await data.bot.sendMessage(data.id, i.data.text, opts))
           break
         case "image":
-          logger.info(`${logger.blue(`[${data.self_id}]`)} 发送图片：[${data.id}] ${i.data.file.replace(/^base64:\/\/.*/, "base64://...")}`)
-          msgs.push(await data.bot.sendPhoto(data.id, await this.makeBuffer(i.data.file), opts))
+          logger.info(`${logger.blue(`[${data.self_id}]`)} 发送图片：[${data.id}] ${file.name}(${file.url})`)
+          const size = sizeOf(file.buffer)
+          if (size.height > 1280 || size.width > 1280)
+            msgs.push(await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name }))
+          else
+            msgs.push(await data.bot.sendPhoto(data.id, file.buffer, opts, { filename: file.name }))
           break
         case "record":
-          logger.info(`${logger.blue(`[${data.self_id}]`)} 发送音频：[${data.id}] ${i.data.file.replace(/^base64:\/\/.*/, "base64://...")}`)
-          msgs.push(await data.bot.sendAudio(data.id, await this.makeBuffer(i.data.file), opts))
+          logger.info(`${logger.blue(`[${data.self_id}]`)} 发送音频：[${data.id}] ${file.name}(${file.url})`)
+          msgs.push(await data.bot.sendAudio(data.id, file.buffer, opts, { filename: file.name }))
           break
         case "video":
-          logger.info(`${logger.blue(`[${data.self_id}]`)} 发送视频：[${data.id}] ${i.data.file.replace(/^base64:\/\/.*/, "base64://...")}`)
-          msgs.push(await data.bot.sendVideo(data.id, await this.makeBuffer(i.data.file), opts))
+          logger.info(`${logger.blue(`[${data.self_id}]`)} 发送视频：[${data.id}] ${file.name}(${file.url})`)
+          msgs.push(await data.bot.sendVideo(data.id, file.buffer, opts, { filename: file.name }))
           break
         case "reply":
           opts.reply_to_message_id = i.data.id
@@ -73,10 +101,16 @@ const adapter = new class TelegramAdapter {
   }
 
   async getAvatarUrl(data) {
-    return data.bot.getFileLink((await data.bot.getChat(data.id)).photo.big_file_id)
+    try {
+      return data.bot.getFileLink((await data.bot.getChat(data.id)).photo.big_file_id)
+    } catch (err) {
+      logger.error(`获取头像错误：${logger.red(err)}`)
+      return false
+    }
   }
 
   async sendFile(data, file, filename = path.basename(file)) {
+    logger.info(`${logger.blue(`[${data.self_id}]`)} 发送文件：[${data.id}] ${filename}(${file})`)
     return data.bot.sendDocument(data.id, await this.makeBuffer(file), undefined, { filename })
   }
 
