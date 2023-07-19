@@ -19,8 +19,7 @@ const adapter = new class TelegramAdapter {
       return Buffer.from(file.replace(/^base64:\/\//, ""), "base64")
     else if (file.match(/^https?:\/\//))
       return Buffer.from(await (await fetch(file)).arrayBuffer())
-    else
-      return file
+    return file
   }
 
   async fileType(data) {
@@ -82,7 +81,7 @@ const adapter = new class TelegramAdapter {
         case "at":
           break
         case "node":
-          msgs.push(await this.sendForwardMsg(data, i.data))
+          msgs.push(await Bot.sendForwardMsg(msg => this.sendMsg(data, msg), i.data))
           break
         default:
           i = JSON.stringify(i)
@@ -91,13 +90,6 @@ const adapter = new class TelegramAdapter {
       }
     }
     return msgs
-  }
-
-  async sendForwardMsg(data, msg) {
-    const messages = []
-    for (const i of msg)
-      messages.push(await this.sendMsg(data, i.message))
-    return messages
   }
 
   async getAvatarUrl(data) {
@@ -126,7 +118,7 @@ const adapter = new class TelegramAdapter {
       sendMsg: msg => this.sendMsg(i, msg),
       recallMsg: () => false,
       makeForwardMsg: Bot.makeForwardMsg,
-      sendForwardMsg: msg => this.sendForwardMsg(i, msg),
+      sendForwardMsg: msg => Bot.sendForwardMsg(msg => this.sendMsg(i, msg), msg),
       sendFile: (file, name) => this.sendFile(i, file, name),
       getInfo: () => i.bot.getChat(i.id),
       getAvatarUrl: () => this.getAvatarUrl(i),
@@ -160,7 +152,7 @@ const adapter = new class TelegramAdapter {
       sendMsg: msg => this.sendMsg(i, msg),
       recallMsg: () => false,
       makeForwardMsg: Bot.makeForwardMsg,
-      sendForwardMsg: msg => this.sendForwardMsg(i, msg),
+      sendForwardMsg: msg => Bot.sendForwardMsg(msg => this.sendMsg(i, msg), msg),
       sendFile: (file, name) => this.sendFile(i, file, name),
       getInfo: () => i.bot.getChat(i.id),
       getAvatarUrl: () => this.getAvatarUrl(i),
@@ -226,6 +218,7 @@ const adapter = new class TelegramAdapter {
 
     const id = `tg_${bot.info.id}`
     Bot[id] = bot
+    Bot[id].adapter = this
     Bot[id].uin = id
     Bot[id].nickname = `${Bot[id].info.first_name}-${Bot[id].info.username}`
     Bot[id].version = {
@@ -279,17 +272,17 @@ export class Telegram extends plugin {
         {
           reg: "^#[Tt][Gg]账号$",
           fnc: "List",
-          permission: "master"
+          permission: config.permission,
         },
         {
           reg: "^#[Tt][Gg]设置[0-9]+:.+$",
           fnc: "Token",
-          permission: "master"
+          permission: config.permission,
         },
         {
           reg: "^#[Tt][Gg](代理|反代)",
           fnc: "Proxy",
-          permission: "master"
+          permission: config.permission,
         }
       ]
     })
