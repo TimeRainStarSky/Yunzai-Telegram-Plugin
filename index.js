@@ -1,4 +1,4 @@
-logger.info(logger.yellow("- 正在加载 Telegram 插件"))
+logger.info(logger.yellow("- 正在加载 Telegram 适配器插件"))
 
 import { config, configSave } from "./Model/config.js"
 import fetch from "node-fetch"
@@ -265,8 +265,8 @@ Bot.adapter.push(adapter)
 export class Telegram extends plugin {
   constructor() {
     super({
-      name: "Telegram",
-      dsc: "Telegram",
+      name: "TelegramAdapter",
+      dsc: "Telegram 适配器设置",
       event: "message",
       rule: [
         {
@@ -322,4 +322,4 @@ export class Telegram extends plugin {
   }
 }
 
-logger.info(logger.green("- Telegram 插件 加载完成"))
+logger.info(logger.green("- Telegram 适配器插件 加载完成"))
