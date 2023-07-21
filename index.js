@@ -209,9 +209,13 @@ const adapter = new class TelegramAdapter {
   async connect(token) {
     const bot = new TelegramBot(token, { polling: true, baseApiUrl: config.reverseProxy, request: { proxy: config.proxy }})
     bot.on("polling_error", logger.error)
-    bot.info = await bot.getMe()
+    try {
+      bot.info = await bot.getMe()
+    } catch (err) {
+      logger.error(`${logger.blue(`[${token}]`)} 获取 Bot 信息错误：${logger.red(err)}`)
+    }
 
-    if (!bot.info.id) {
+    if (!bot.info?.id) {
       logger.error(`${logger.blue(`[${token}]`)} ${this.name}(${this.id}) 连接失败`)
       return false
     }
