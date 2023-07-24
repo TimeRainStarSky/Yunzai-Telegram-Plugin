@@ -4,7 +4,7 @@ import { config, configSave } from "./Model/config.js"
 import fetch from "node-fetch"
 import path from "node:path"
 import { fileTypeFromBuffer } from "file-type"
-import sizeOf from "image-size"
+import imageSize from "image-size"
 import TelegramBot from "node-telegram-bot-api"
 process.env.NTBA_FIX_350 = 1
 
@@ -46,22 +46,20 @@ const adapter = new class TelegramAdapter {
     const opts = {}
     for (let i of msg) {
       if (typeof i != "object")
-        i = { type: "text", data: { text: i }}
-      else if (!i.data)
-        i = { type: i.type, data: { ...i, type: undefined }}
+        i = { type: "text", text: i }
 
       let file
-      if (i.data.file)
-        file = await this.fileType(i.data.file)
+      if (i.file)
+        file = await this.fileType(i.file)
 
       switch (i.type) {
         case "text":
-          logger.info(`${logger.blue(`[${data.self_id}]`)} 发送文本：[${data.id}] ${i.data.text}`)
-          msgs.push(await data.bot.sendMessage(data.id, i.data.text, opts))
+          logger.info(`${logger.blue(`[${data.self_id}]`)} 发送文本：[${data.id}] ${i.text}`)
+          msgs.push(await data.bot.sendMessage(data.id, i.text, opts))
           break
         case "image":
           logger.info(`${logger.blue(`[${data.self_id}]`)} 发送图片：[${data.id}] ${file.name}(${file.url})`)
-          const size = sizeOf(file.buffer)
+          const size = imageSize(file.buffer)
           if (size.height > 1280 || size.width > 1280)
             msgs.push(await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name }))
           else
@@ -76,7 +74,7 @@ const adapter = new class TelegramAdapter {
           msgs.push(await data.bot.sendVideo(data.id, file.buffer, opts, { filename: file.name }))
           break
         case "reply":
-          opts.reply_to_message_id = i.data.id
+          opts.reply_to_message_id = i.id
           break
         case "at":
           break
