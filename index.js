@@ -12,6 +12,7 @@ const adapter = new class TelegramAdapter {
   constructor() {
     this.id = "Telegram"
     this.name = "TelegramBot"
+    this.version = `node-telegram-bot-api-${config.package.dependencies["node-telegram-bot-api"].replace("^", "v")}`
   }
 
   async makeBuffer(file) {
@@ -39,11 +40,11 @@ const adapter = new class TelegramAdapter {
     return file
   }
 
-  async sendMsg(data, msg) {
+  async sendMsg(data, msg, opts = {}) {
     if (!Array.isArray(msg))
       msg = [msg]
     const msgs = []
-    const opts = {}
+    const message_id = []
     for (let i of msg) {
       if (typeof i != "object")
         i = { type: "text", text: i }
@@ -52,41 +53,65 @@ const adapter = new class TelegramAdapter {
       if (i.file)
         file = await this.fileType(i.file)
 
+      let ret
       switch (i.type) {
         case "text":
           logger.info(`${logger.blue(`[${data.self_id}]`)} 发送文本：[${data.id}] ${i.text}`)
-          msgs.push(await data.bot.sendMessage(data.id, i.text, opts))
+          ret = await data.bot.sendMessage(data.id, i.text, opts)
           break
         case "image":
           logger.info(`${logger.blue(`[${data.self_id}]`)} 发送图片：[${data.id}] ${file.name}(${file.url})`)
           const size = imageSize(file.buffer)
           if (size.height > 1280 || size.width > 1280)
-            msgs.push(await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name }))
+            ret = await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name })
           else
-            msgs.push(await data.bot.sendPhoto(data.id, file.buffer, opts, { filename: file.name }))
+            ret = await data.bot.sendPhoto(data.id, file.buffer, opts, { filename: file.name })
           break
         case "record":
           logger.info(`${logger.blue(`[${data.self_id}]`)} 发送音频：[${data.id}] ${file.name}(${file.url})`)
-          msgs.push(await data.bot.sendAudio(data.id, file.buffer, opts, { filename: file.name }))
+          if (file.type.ext == "mp3" || file.type.ext == "m4a")
+            ret = await data.bot.sendAudio(data.id, file.buffer, opts, { filename: file.name })
+          else if (file.type.ext == "opus")
+            ret = await data.bot.sendVoice(data.id, file.buffer, opts, { filename: file.name })
+          else
+            ret = await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name })
           break
         case "video":
           logger.info(`${logger.blue(`[${data.self_id}]`)} 发送视频：[${data.id}] ${file.name}(${file.url})`)
-          msgs.push(await data.bot.sendVideo(data.id, file.buffer, opts, { filename: file.name }))
+          ret = await data.bot.sendVideo(data.id, file.buffer, opts, { filename: file.name })
           break
         case "reply":
           opts.reply_to_message_id = i.id
           break
-        case "at":
+        case "at": {
+          const at = (await data.bot.pickFriend(i.qq).getInfo()).username
+          logger.info(`${logger.blue(`[${data.self_id}]`)} 发送提及：[${data.id}] @${at}(${i.qq})`)
+          ret = await data.bot.sendMessage(data.id, `@${at}`, opts)
           break
-        case "node":
-          msgs.push(await Bot.sendForwardMsg(msg => this.sendMsg(data, msg), i.data))
+        } case "node":
+          ret = await Bot.sendForwardMsg(msg => this.sendMsg(data, msg), i.data)
           break
         default:
           i = JSON.stringify(i)
           logger.info(`${logger.blue(`[${data.self_id}]`)} 发送消息：[${data.id}] ${i}`)
-          msgs.push(await data.bot.sendMessage(data.id, i, opts))
+          ret = await data.bot.sendMessage(data.id, i, opts)
+      }
+      if (ret) {
+        msgs.push(ret)
+        if (ret.message_id)
+          message_id.push(ret.message_id)
       }
     }
+    return { data: msgs, message_id }
+  }
+
+  async recallMsg(data, message_id, opts) {
+    logger.info(`${logger.blue(`[${data.self_id}]`)} 撤回消息：[${data.id}] ${message_id}`)
+    if (!Array.isArray(message_id))
+      message_id = [message_id]
+    const msgs = []
+    for (const i of message_id)
+      msgs.push(await data.bot.deleteMessage(data.id, i, opts))
     return msgs
   }
 
@@ -113,10 +138,8 @@ const adapter = new class TelegramAdapter {
     }
     return {
       ...i,
-      sendMsg: msg => this.sendMsg(i, msg),
-      recallMsg: () => false,
-      makeForwardMsg: Bot.makeForwardMsg,
-      sendForwardMsg: msg => Bot.sendForwardMsg(msg => this.sendMsg(i, msg), msg),
+      sendMsg: (msg, opts) => this.sendMsg(i, msg, opts),
+      recallMsg: (message_id, opts) => this.recallMsg(i, message_id, opts),
       sendFile: (file, name) => this.sendFile(i, file, name),
       getInfo: () => i.bot.getChat(i.id),
       getAvatarUrl: () => this.getAvatarUrl(i),
@@ -147,10 +170,8 @@ const adapter = new class TelegramAdapter {
     }
     return {
       ...i,
-      sendMsg: msg => this.sendMsg(i, msg),
-      recallMsg: () => false,
-      makeForwardMsg: Bot.makeForwardMsg,
-      sendForwardMsg: msg => Bot.sendForwardMsg(msg => this.sendMsg(i, msg), msg),
+      sendMsg: (msg, opts) => this.sendMsg(i, msg, opts),
+      recallMsg: (message_id, opts) => this.recallMsg(i, message_id, opts),
       sendFile: (file, name) => this.sendFile(i, file, name),
       getInfo: () => i.bot.getChat(i.id),
       getAvatarUrl: () => this.getAvatarUrl(i),
@@ -184,7 +205,6 @@ const adapter = new class TelegramAdapter {
 
     if (data.from.id == data.chat.id) {
       logger.info(`${logger.blue(`[${data.self_id}]`)} 好友消息：[${data.sender.nickname}(${data.user_id})] ${data.raw_message}`)
-      data.friend = data.bot.pickFriend(data.user_id)
     } else {
       data.group_id = `tg_${data.chat.id}`
       data.group_name = `${data.chat.title}-${data.chat.username}`
@@ -193,11 +213,7 @@ const adapter = new class TelegramAdapter {
         group_id: data.group_id,
         group_name: data.group_name,
       })
-
       logger.info(`${logger.blue(`[${data.self_id}]`)} 群消息：[${data.group_name}(${data.group_id}), ${data.sender.nickname}(${data.user_id})] ${data.raw_message}`)
-      data.friend = data.bot.pickFriend(data.user_id)
-      data.group = data.bot.pickGroup(data.group_id)
-      data.member = data.group.pickMember(data.user_id)
     }
 
     Bot.emit(`${data.post_type}.${data.message_type}`, data)
@@ -214,7 +230,7 @@ const adapter = new class TelegramAdapter {
     }
 
     if (!bot.info?.id) {
-      logger.error(`${logger.blue(`[${token}]`)} ${this.name}(${this.id}) 连接失败`)
+      logger.error(`${logger.blue(`[${token}]`)} ${this.name}(${this.id}) ${this.version} 连接失败`)
       return false
     }
 
@@ -226,7 +242,7 @@ const adapter = new class TelegramAdapter {
     Bot[id].version = {
       id: this.id,
       name: this.name,
-      version: config.package.dependencies["node-telegram-bot-api"],
+      version: this.version,
     }
     Bot[id].stat = { start_time: Date.now()/1000 }
     Bot[id].fl = new Map()
@@ -249,7 +265,7 @@ const adapter = new class TelegramAdapter {
       this.makeMessage(data)
     })
 
-    logger.mark(`${logger.blue(`[${id}]`)} ${this.name}(${this.id}) 已连接`)
+    logger.mark(`${logger.blue(`[${id}]`)} ${this.name}(${this.id}) ${this.version} 已连接`)
     Bot.emit(`connect.${id}`, Bot[id])
     Bot.emit("connect", Bot[id])
     return true
