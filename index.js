@@ -180,6 +180,7 @@ const adapter = new class TelegramAdapter {
   }
 
   makeMessage(data) {
+    data.bot = Bot[data.self_id]
     data.post_type = "message"
     data.user_id = `tg_${data.from.id}`
     data.sender = {
@@ -245,8 +246,9 @@ const adapter = new class TelegramAdapter {
       version: this.version,
     }
     Bot[id].stat = { start_time: Date.now()/1000 }
-    Bot[id].fl = new Map()
-    Bot[id].gl = new Map()
+    Bot[id].fl = new Map
+    Bot[id].gl = new Map
+    Bot[id].gml = new Map
 
     Bot[id].pickFriend = user_id => this.pickFriend(id, user_id)
     Bot[id].pickUser = Bot[id].pickFriend
@@ -256,25 +258,19 @@ const adapter = new class TelegramAdapter {
 
     Bot[id].avatar = await Bot[id].pickFriend(id).getAvatarUrl()
 
-    if (!Bot.uin.includes(id))
-      Bot.uin.push(id)
-
     Bot[id].on("message", data => {
       data.self_id = id
-      data.bot = Bot[id]
       this.makeMessage(data)
     })
 
     logger.mark(`${logger.blue(`[${id}]`)} ${this.name}(${this.id}) ${this.version} 已连接`)
-    Bot.emit(`connect.${id}`, Bot[id])
-    Bot.emit("connect", Bot[id])
+    Bot.em(`connect.${id}`, { self_id: id })
     return true
   }
 
   async load() {
     for (const token of config.token)
       await adapter.connect(token)
-    return true
   }
 }
 
