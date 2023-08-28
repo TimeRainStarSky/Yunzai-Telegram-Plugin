@@ -12,7 +12,7 @@ const adapter = new class TelegramAdapter {
   constructor() {
     this.id = "Telegram"
     this.name = "TelegramBot"
-    this.version = `node-telegram-bot-api-${config.package.dependencies["node-telegram-bot-api"].replace("^", "v")}`
+    this.version = `node-telegram-bot-api ${config.package.dependencies["node-telegram-bot-api"].replace("^", "v")}`
   }
 
   async makeBuffer(file) {
@@ -270,7 +270,10 @@ const adapter = new class TelegramAdapter {
 
   async load() {
     for (const token of config.token)
-      await adapter.connect(token)
+      await new Promise(resolve => {
+        adapter.connect(token).then(resolve)
+        setTimeout(resolve, 5000)
+      })
   }
 }
 
