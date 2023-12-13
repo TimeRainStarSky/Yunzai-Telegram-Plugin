@@ -3,7 +3,6 @@ logger.info(logger.yellow("- 正在加载 Telegram 适配器插件"))
 import { config, configSave } from "./Model/config.js"
 import fetch from "node-fetch"
 import path from "node:path"
-import { fileTypeFromBuffer } from "file-type"
 import imageSize from "image-size"
 import TelegramBot from "node-telegram-bot-api"
 process.env.NTBA_FIX_350 = 1
@@ -13,28 +12,6 @@ const adapter = new class TelegramAdapter {
     this.id = "Telegram"
     this.name = "TelegramBot"
     this.version = `node-telegram-bot-api ${config.package.dependencies["node-telegram-bot-api"].replace("^", "v")}`
-  }
-
-  async fileType(data, name) {
-    const file = {}
-    try {
-      if (Buffer.isBuffer(data)) {
-        file.url = name || "Buffer"
-        file.buffer = data
-      } else {
-        file.url = data.replace(/^base64:\/\/.*/, "base64://...")
-        file.buffer = await Bot.Buffer(data)
-      }
-      if (Buffer.isBuffer(file.buffer)) {
-        file.type = await fileTypeFromBuffer(file.buffer)
-        file.name = `${Date.now()}.${file.type.ext}`
-      } else {
-        file.name = path.basename(file.buffer)
-      }
-    } catch (err) {
-      logger.error(`文件类型检测错误：${logger.red(err)}`)
-    }
-    return file
   }
 
   async sendMsg(data, msg, opts = {}) {
@@ -48,7 +25,7 @@ const adapter = new class TelegramAdapter {
 
       let file
       if (i.file)
-        file = await this.fileType(i.file, i.name)
+        file = await Bot.fileType(i.file, i.name)
 
       let ret
       switch (i.type) {
@@ -57,7 +34,7 @@ const adapter = new class TelegramAdapter {
           ret = await data.bot.sendMessage(data.id, i.text, opts)
           break
         case "image":
-          Bot.makeLog("info", `发送图片：[${data.id}] ${file.name}(${file.url})`, data.self_id)
+          Bot.makeLog("info", `发送图片：[${data.id}] ${file.name}(${file.url} ${(file.buffer.length/1024).toFixed(2)}KB)`, data.self_id)
           const size = imageSize(file.buffer)
           if (size.height > 1280 || size.width > 1280)
             ret = await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name })
@@ -65,7 +42,7 @@ const adapter = new class TelegramAdapter {
             ret = await data.bot.sendPhoto(data.id, file.buffer, opts, { filename: file.name })
           break
         case "record":
-          Bot.makeLog("info", `发送音频：[${data.id}] ${file.name}(${file.url})`, data.self_id)
+          Bot.makeLog("info", `发送音频：[${data.id}] ${file.name}(${file.url} ${(file.buffer.length/1024).toFixed(2)}KB)`, data.self_id)
           if (file.type.ext == "mp3" || file.type.ext == "m4a")
             ret = await data.bot.sendAudio(data.id, file.buffer, opts, { filename: file.name })
           else if (file.type.ext == "opus")
@@ -74,7 +51,7 @@ const adapter = new class TelegramAdapter {
             ret = await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name })
           break
         case "video":
-          Bot.makeLog("info", `发送视频：[${data.id}] ${file.name}(${file.url})`, data.self_id)
+          Bot.makeLog("info", `发送视频：[${data.id}] ${file.name}(${file.url} ${(file.buffer.length/1024).toFixed(2)}KB)`, data.self_id)
           ret = await data.bot.sendVideo(data.id, file.buffer, opts, { filename: file.name })
           break
         case "reply":
