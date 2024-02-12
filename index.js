@@ -1,17 +1,30 @@
 logger.info(logger.yellow("- 正在加载 Telegram 适配器插件"))
 
-import { config, configSave } from "./Model/config.js"
+import makeConfig from "../../lib/plugins/config.js"
 import fetch from "node-fetch"
 import path from "node:path"
 import imageSize from "image-size"
 import TelegramBot from "node-telegram-bot-api"
 process.env.NTBA_FIX_350 = 1
 
+const { config, configSave } = await makeConfig("Telegram", {
+  tips: "",
+  permission: "master",
+  proxy: "",
+  reverseProxy: "",
+  token: [],
+}, {
+  tips: [
+    "欢迎使用 TRSS-Yunzai Telegram Plugin ! 作者：时雨🌌星空",
+    "参考：https://github.com/TimeRainStarSky/Yunzai-Telegram-Plugin",
+  ],
+})
+
 const adapter = new class TelegramAdapter {
   constructor() {
     this.id = "Telegram"
     this.name = "TelegramBot"
-    this.version = `node-telegram-bot-api ${config.package.dependencies["node-telegram-bot-api"].replace("^", "v")}`
+    this.version = `node-telegram-bot-api v0.64.0`
   }
 
   async sendMsg(data, msg, opts = {}) {
@@ -65,6 +78,8 @@ const adapter = new class TelegramAdapter {
         } case "node":
           ret = await Bot.sendForwardMsg(msg => this.sendMsg(data, msg), i.data)
           break
+        case "button":
+          continue
         default:
           i = JSON.stringify(i)
           Bot.makeLog("info", `发送消息：[${data.id}] ${i}`, data.self_id)
@@ -299,10 +314,10 @@ export class Telegram extends plugin {
         return false
       }
     }
-    configSave(config)
+    await configSave()
   }
 
-  Proxy() {
+  async Proxy() {
     const proxy = this.e.msg.replace(/^#[Tt][Gg](代理|反代)/, "").trim()
     if (this.e.msg.match("代理")) {
       config.proxy = proxy
@@ -311,7 +326,7 @@ export class Telegram extends plugin {
       config.reverseProxy = proxy
       this.reply(`反代已${proxy?"设置":"删除"}，重启后生效`, true)
     }
-    configSave(config)
+    await configSave()
   }
 }
 
