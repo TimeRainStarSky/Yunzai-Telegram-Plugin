@@ -32,21 +32,34 @@ const adapter = new class TelegramAdapter {
       msg = [msg]
     const msgs = []
     const message_id = []
+    let text = ""
+    const sendText = async () => {
+      if (!text) return
+      Bot.makeLog("info", `发送文本：[${data.id}] ${text}`, data.self_id)
+      const ret = await data.bot.sendMessage(data.id, text, opts)
+      if (ret) {
+        msgs.push(ret)
+        if (ret.message_id)
+          message_id.push(ret.message_id)
+      }
+      text = ""
+    }
+
     for (let i of msg) {
       if (typeof i != "object")
         i = { type: "text", text: i }
 
       let file
       if (i.file)
-        file = await Bot.fileType(i.file, i.name)
+        file = await Bot.fileType(i.file, i)
 
       let ret
       switch (i.type) {
         case "text":
-          Bot.makeLog("info", `发送文本：[${data.id}] ${i.text}`, data.self_id)
-          ret = await data.bot.sendMessage(data.id, i.text, opts)
+          text += i.text
           break
         case "image":
+          await sendText()
           Bot.makeLog("info", `发送图片：[${data.id}] ${file.name}(${file.url} ${(file.buffer.length/1024).toFixed(2)}KB)`, data.self_id)
           const size = imageSize(file.buffer)
           if (size.height > 1280 || size.width > 1280)
@@ -55,6 +68,7 @@ const adapter = new class TelegramAdapter {
             ret = await data.bot.sendPhoto(data.id, file.buffer, opts, { filename: file.name })
           break
         case "record":
+          await sendText()
           Bot.makeLog("info", `发送音频：[${data.id}] ${file.name}(${file.url} ${(file.buffer.length/1024).toFixed(2)}KB)`, data.self_id)
           if (file.type.ext == "mp3" || file.type.ext == "m4a")
             ret = await data.bot.sendAudio(data.id, file.buffer, opts, { filename: file.name })
@@ -64,26 +78,31 @@ const adapter = new class TelegramAdapter {
             ret = await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name })
           break
         case "video":
+          await sendText()
           Bot.makeLog("info", `发送视频：[${data.id}] ${file.name}(${file.url} ${(file.buffer.length/1024).toFixed(2)}KB)`, data.self_id)
           ret = await data.bot.sendVideo(data.id, file.buffer, opts, { filename: file.name })
+          break
+        case "file":
+          await sendText()
+          Bot.makeLog("info", `发送文件：[${data.id}] ${file.name}(${file.url} ${(file.buffer.length/1024).toFixed(2)}KB)`, data.self_id)
+          ret = await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name })
           break
         case "reply":
           opts.reply_to_message_id = i.id
           break
-        case "at": {
-          const at = (await data.bot.pickFriend(i.qq).getInfo()).username
-          Bot.makeLog("info", `发送提及：[${data.id}] @${at}(${i.qq})`, data.self_id)
-          ret = await data.bot.sendMessage(data.id, `@${at}`, opts)
+        case "at":
+          text += `@${(await data.bot.pickFriend(i.qq).getInfo()).username}`
           break
-        } case "node":
-          ret = await Bot.sendForwardMsg(msg => this.sendMsg(data, msg), i.data)
+        case "node":
+          for (const ret of await Bot.sendForwardMsg(msg => this.sendMsg(data, msg), i.data)) {
+            msgs.push(...ret.data)
+            message_id.push(...ret.message_id)
+          }
           break
         case "button":
           continue
         default:
-          i = JSON.stringify(i)
-          Bot.makeLog("info", `发送消息：[${data.id}] ${i}`, data.self_id)
-          ret = await data.bot.sendMessage(data.id, i, opts)
+          text += JSON.stringify(i)
       }
       if (ret) {
         msgs.push(ret)
@@ -91,6 +110,8 @@ const adapter = new class TelegramAdapter {
           message_id.push(ret.message_id)
       }
     }
+
+    await sendText()
     return { data: msgs, message_id }
   }
 
@@ -113,11 +134,6 @@ const adapter = new class TelegramAdapter {
     }
   }
 
-  async sendFile(data, file, filename = path.basename(file)) {
-    Bot.makeLog("info", `发送文件：[${data.id}] ${filename}(${file})`, data.self_id)
-    return data.bot.sendDocument(data.id, await this.makeBuffer(file), undefined, { filename })
-  }
-
   pickFriend(id, user_id) {
     const i = {
       ...Bot[id].fl.get(user_id),
@@ -129,7 +145,6 @@ const adapter = new class TelegramAdapter {
       ...i,
       sendMsg: (msg, opts) => this.sendMsg(i, msg, opts),
       recallMsg: (message_id, opts) => this.recallMsg(i, message_id, opts),
-      sendFile: (file, name) => this.sendFile(i, file, name),
       getInfo: () => i.bot.getChat(i.id),
       getAvatarUrl: () => this.getAvatarUrl(i),
     }
@@ -161,7 +176,6 @@ const adapter = new class TelegramAdapter {
       ...i,
       sendMsg: (msg, opts) => this.sendMsg(i, msg, opts),
       recallMsg: (message_id, opts) => this.recallMsg(i, message_id, opts),
-      sendFile: (file, name) => this.sendFile(i, file, name),
       getInfo: () => i.bot.getChat(i.id),
       getAvatarUrl: () => this.getAvatarUrl(i),
       pickMember: user_id => this.pickMember(id, i.id, user_id),
@@ -206,8 +220,7 @@ const adapter = new class TelegramAdapter {
       Bot.makeLog("info", `群消息：[${data.group_name}(${data.group_id}), ${data.sender.nickname}(${data.user_id})] ${data.raw_message}`, data.self_id)
     }
 
-    Bot.emit(`${data.post_type}.${data.message_type}`, data)
-    Bot.emit(`${data.post_type}`, data)
+    Bot.em(`${data.post_type}.${data.message_type}`, data)
   }
 
   async connect(token) {
