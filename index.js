@@ -51,7 +51,7 @@ const adapter = new class TelegramAdapter {
 
       let file
       if (i.file)
-        file = await Bot.fileType(i.file, i)
+        file = await Bot.fileType(i)
 
       let ret
       switch (i.type) {
