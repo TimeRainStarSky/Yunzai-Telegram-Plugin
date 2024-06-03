@@ -24,7 +24,7 @@ const adapter = new class TelegramAdapter {
   constructor() {
     this.id = "Telegram"
     this.name = "TelegramBot"
-    this.version = `node-telegram-bot-api v0.64.0`
+    this.version = `node-telegram-bot-api v0.66.0`
   }
 
   async sendMsg(data, msg, opts = {}) {
@@ -46,7 +46,7 @@ const adapter = new class TelegramAdapter {
     }
 
     for (let i of msg) {
-      if (typeof i != "object")
+      if (typeof i !== "object")
         i = { type: "text", text: i }
 
       let file
@@ -70,9 +70,9 @@ const adapter = new class TelegramAdapter {
         case "record":
           await sendText()
           Bot.makeLog("info", `发送音频：[${data.id}] ${file.name}(${file.url} ${(file.buffer.length/1024).toFixed(2)}KB)`, data.self_id)
-          if (file.type.ext == "mp3" || file.type.ext == "m4a")
+          if (file.type.ext === "mp3" || file.type.ext === "m4a")
             ret = await data.bot.sendAudio(data.id, file.buffer, opts, { filename: file.name })
-          else if (file.type.ext == "opus")
+          else if (file.type.ext === "opus")
             ret = await data.bot.sendVoice(data.id, file.buffer, opts, { filename: file.name })
           else
             ret = await data.bot.sendDocument(data.id, file.buffer, opts, { filename: file.name })
@@ -135,6 +135,8 @@ const adapter = new class TelegramAdapter {
   }
 
   pickFriend(id, user_id) {
+    if (typeof user_id !== "string")
+      user_id = String(user_id)
     const i = {
       ...Bot[id].fl.get(user_id),
       self_id: id,
@@ -151,6 +153,10 @@ const adapter = new class TelegramAdapter {
   }
 
   pickMember(id, group_id, user_id) {
+    if (typeof group_id !== "string")
+      group_id = String(group_id)
+    if (typeof user_id !== "string")
+      user_id = String(user_id)
     const i = {
       ...Bot[id].fl.get(user_id),
       self_id: id,
@@ -166,6 +172,8 @@ const adapter = new class TelegramAdapter {
   }
 
   pickGroup(id, group_id) {
+    if (typeof group_id !== "string")
+      group_id = String(group_id)
     const i = {
       ...Bot[id].gl.get(group_id),
       self_id: id,
@@ -207,7 +215,7 @@ const adapter = new class TelegramAdapter {
       data.raw_message += data.text
     }
 
-    if (data.from.id == data.chat.id) {
+    if (data.from.id === data.chat.id) {
       Bot.makeLog("info", `好友消息：[${data.sender.nickname}(${data.user_id})] ${data.raw_message}`, data.self_id)
     } else {
       data.group_id = `tg_${data.chat.id}`
@@ -231,11 +239,11 @@ const adapter = new class TelegramAdapter {
     try {
       bot.info = await bot.getMe()
     } catch (err) {
-      logger.error(`${logger.blue(`[${token}]`)} 获取 Bot 信息错误：${logger.red(err)}`)
+      Bot.makeLog("error", `获取 Bot 信息错误：${logger.red(err)}`, token)
     }
 
     if (!bot.info?.id) {
-      logger.error(`${logger.blue(`[${token}]`)} ${this.name}(${this.id}) ${this.version} 连接失败`)
+      Bot.makeLog("error", `${this.name}(${this.id}) ${this.version} 连接失败`, token)
       return false
     }
 
@@ -267,17 +275,14 @@ const adapter = new class TelegramAdapter {
       this.makeMessage(data)
     })
 
-    logger.mark(`${logger.blue(`[${id}]`)} ${this.name}(${this.id}) ${this.version} 已连接`)
+    Bot.makeLog("mark", `${this.name}(${this.id}) ${this.version} 已连接`, id)
     Bot.em(`connect.${id}`, { self_id: id })
     return true
   }
 
   async load() {
     for (const token of config.token)
-      await new Promise(resolve => {
-        adapter.connect(token).then(resolve)
-        setTimeout(resolve, 5000)
-      })
+      await Bot.sleep(5000, this.connect(token))
   }
 }
 
@@ -316,7 +321,7 @@ export class Telegram extends plugin {
   async Token() {
     const token = this.e.msg.replace(/^#[Tt][Gg]设置/, "").trim()
     if (config.token.includes(token)) {
-      config.token = config.token.filter(item => item != token)
+      config.token = config.token.filter(item => item !== token)
       this.reply(`账号已删除，重启后生效，共${config.token.length}个账号`, true)
     } else {
       if (await adapter.connect(token)) {
